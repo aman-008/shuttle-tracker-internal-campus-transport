@@ -72,3 +72,9 @@ The API seeds sample routes, stops, vehicles, schedules, and campus settings on 
 For production, configure `MONGODB_URI`, `ADMIN_EMAIL`, `ADMIN_PASSWORD`, and `NODE_ENV=production` on the API host. Serve the frontend and API on the same origin or use a reverse proxy for `/api`. Production session cookies require HTTPS.
 
 See [`client/README.md`](client/README.md) for additional setup and authentication details.
+
+## Deploy to Render
+
+The root [`render.yaml`](render.yaml) configures a single Render web service that builds the frontend and serves it alongside the API. Create a new Blueprint from this GitHub repository and provide `MONGODB_URI`, `ADMIN_EMAIL`, and `ADMIN_PASSWORD` as secret environment values when prompted. Use a MongoDB Atlas URI that allows connections from Render, and a unique administrator password of 12–72 UTF-8 bytes. Do not commit credentials. Render sets `NODE_ENV=production`, enabling secure HTTPS-only session cookies.
+
+The free Render service may sleep when idle and take a short time to wake on the next visit.

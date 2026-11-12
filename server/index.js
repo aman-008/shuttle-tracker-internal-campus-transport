@@ -1,4 +1,6 @@
 import { createHash, randomBytes } from 'node:crypto'
+import { existsSync } from 'node:fs'
+import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import dotenv from 'dotenv'
 import express from 'express'
@@ -717,6 +719,19 @@ app.patch('/api/admin/settings', async (request, response, next) => {
     return next(error)
   }
 })
+
+app.get('/api/health', (_request, response) => response.json({ status: 'ok' }))
+
+const clientDist = fileURLToPath(new URL('../client/dist/', import.meta.url))
+if (existsSync(clientDist)) {
+  app.use(express.static(clientDist))
+  app.get('/{*path}', (request, response, next) => {
+    if (request.path.startsWith('/api/')) return next()
+    return response.sendFile(join(clientDist, 'index.html'), (error) => {
+      if (error) next(error)
+    })
+  })
+}
 
 app.use((error, request, response, _next) => {
   if (response.headersSent) return
