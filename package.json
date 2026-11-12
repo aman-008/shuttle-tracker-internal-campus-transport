@@ -1,0 +1,34 @@
+{
+  "name": "shuttle-tracker",
+  "private": true,
+  "scripts": {
+    "dev": "concurrently -k -n api,web \"node --watch server/index.js\" \"npm run dev --prefix client\"",
+    "start": "node server/index.js",
+    "build": "npm run build --prefix client",
+    "lint": "npm run lint --prefix client"
+  },
+  "dependencies": {
+    "@hookform/resolvers": "^7.0.6",
+    "@tanstack/react-query": "^5.107.1",
+    "axios": "^1.21.1",
+    "bcryptjs": "^3.0.2",
+    "dotenv": "^16.6.1",
+    "express": "^5.1.0",
+    "express-rate-limit": "^8.1.0",
+    "leaflet": "^1.9.4",
+    "lucide-react": "^1.72.0",
+    "react-hook-form": "^7.92.0",
+    "react-leaflet": "^5.0.0",
+    "react-router-dom": "^7.18.5",
+    "recharts": "^3.10.1",
+    "socket.io-client": "^4.8.4",
+    "mongoose": "^8.18.0",
+    "zod": "^4.6.7",
+    "zustand": "^5.1.0"
+  },
+  "devDependencies": {
+    "concurrently": "^9.2.1",
+    "@tailwindcss/vite": "^4.3.5",
+    "tailwindcss": "^4.3.5"
+  }
+}
