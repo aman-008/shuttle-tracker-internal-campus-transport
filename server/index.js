@@ -1,17 +1,16 @@
 import { createHash, randomBytes } from 'node:crypto'
-import { existsSync } from 'node:fs'
-import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import dotenv from 'dotenv'
 import express from 'express'
 import rateLimit from 'express-rate-limit'
 import mongoose from 'mongoose'
 import bcrypt from 'bcryptjs'
+import { simulatedLocation } from './simulation.js'
 
 dotenv.config({ path: fileURLToPath(new URL('./.env', import.meta.url)) })
 
 const app = express()
-const port = Number(process.env.PORT ?? 3001)
+const port = Number(process.env.API_PORT ?? 3001)
 const mongoUri = process.env.MONGODB_URI
 const sessionTtlDays = Number(process.env.SESSION_TTL_DAYS ?? 30)
 const sessionCookieName = 'shuttle_session'
@@ -534,6 +533,9 @@ app.post('/api/admin/vehicles', async (request, response, next) => {
     const { code, name, routeId, capacity, occupied, status, location } = request.body ?? {}
     if (typeof code !== 'string' || !/^[A-Z0-9-]{2,12}$/i.test(code)) return badRequest(response, 'Vehicle code must be 2–12 letters, numbers, or hyphens.')
     if (typeof name !== 'string' || name.trim().length < 2 || name.trim().length > 100) return badRequest(response, 'Vehicle name must be between 2 and 100 characters.')
+    if (typeof capacity !== 'number' || !Number.isInteger(capacity) || capacity < 1 || capacity > 100) return badRequest(response, 'Capacity must be an integer between 1 and 100.')
+    if (typeof occupied !== 'number' || !Number.isInteger(occupied) || occupied < 0) return badRequest(response, 'Occupied seats must be a non-negative integer.')
+    if (occupied > capacity) return badRequest(response, 'Occupied seats cannot exceed vehicle capacity.')
     if (routeId && !validId(routeId)) return badRequest(response, 'Select a valid route.')
     if (routeId && !(await Route.exists({ _id: routeId }))) return badRequest(response, 'The selected route could not be found.')
     const vehicle = await Vehicle.create({ code, name: name.trim(), route: routeId || null, capacity, occupied, status, location })
@@ -556,10 +558,18 @@ app.patch('/api/admin/vehicles/:id', async (request, response, next) => {
       update.route = request.body.routeId || null
     }
     if (update.code !== undefined) update.code = String(update.code).toUpperCase()
-    if (update.occupied !== undefined && update.capacity !== undefined && update.occupied > update.capacity) return badRequest(response, 'Occupied seats cannot exceed vehicle capacity.')
+    if (update.capacity !== undefined && (typeof update.capacity !== 'number' || !Number.isInteger(update.capacity) || update.capacity < 1 || update.capacity > 100)) {
+      return badRequest(response, 'Capacity must be an integer between 1 and 100.')
+    }
+    if (update.occupied !== undefined && (typeof update.occupied !== 'number' || !Number.isInteger(update.occupied) || update.occupied < 0)) {
+      return badRequest(response, 'Occupied seats must be a non-negative integer.')
+    }
+    const existingVehicle = await Vehicle.findById(request.params.id)
+    if (!existingVehicle) return response.status(404).json({ error: 'Vehicle not found.' })
+    const finalCapacity = update.capacity ?? existingVehicle.capacity
+    const finalOccupied = update.occupied ?? existingVehicle.occupied
+    if (finalOccupied > finalCapacity) return badRequest(response, 'Occupied seats cannot exceed vehicle capacity.')
     const vehicle = await Vehicle.findByIdAndUpdate(request.params.id, update, { new: true, runValidators: true }).populate('route')
-    if (!vehicle) return response.status(404).json({ error: 'Vehicle not found.' })
-    if (vehicle.occupied > vehicle.capacity) return badRequest(response, 'Occupied seats cannot exceed vehicle capacity.')
     return response.json(serializeVehicle(vehicle))
   } catch (error) {
     if (error?.code === 11000) return response.status(409).json({ error: 'A vehicle with this code already exists.' })
@@ -722,17 +732,6 @@ app.patch('/api/admin/settings', async (request, response, next) => {
 
 app.get('/api/health', (_request, response) => response.json({ status: 'ok' }))
 
-const clientDist = fileURLToPath(new URL('../client/dist/', import.meta.url))
-if (existsSync(clientDist)) {
-  app.use(express.static(clientDist))
-  app.get('/{*path}', (request, response, next) => {
-    if (request.path.startsWith('/api/')) return next()
-    return response.sendFile(join(clientDist, 'index.html'), (error) => {
-      if (error) next(error)
-    })
-  })
-}
-
 app.use((error, request, response, _next) => {
   if (response.headersSent) return
   if (error instanceof SyntaxError && 'body' in error) return response.status(400).json({ error: 'Request body must be valid JSON.' })
@@ -751,6 +750,9 @@ async function seedInitialData() {
     { code: 'CAFETERIA', name: 'Cafeteria', description: 'Main campus cafeteria', location: { lat: 31.26, lng: 75.711 } },
     { code: 'S-HOSTEL', name: 'South Hostel', description: 'South residence pickup', location: { lat: 31.25, lng: 75.714 } },
     { code: 'AUDITORIUM', name: 'Auditorium', description: 'University auditorium', location: { lat: 31.252, lng: 75.716 } },
+    { code: 'UNI-MALL', name: 'University Mall', description: 'Student services and shopping area', location: { lat: 31.256, lng: 75.718 } },
+    { code: 'MEDICAL', name: 'Medical Centre', description: 'Campus medical and emergency services', location: { lat: 31.248, lng: 75.706 } },
+    { code: 'ACADEMIC', name: 'Academic Block', description: 'Main teaching and classroom block', location: { lat: 31.249, lng: 75.710 } },
   ]
   for (const stop of defaults) await Stop.updateOne({ code: stop.code }, { $setOnInsert: stop }, { upsert: true })
   const stops = await Stop.find()
@@ -759,6 +761,7 @@ async function seedInitialData() {
     { code: 'R1', name: 'North Campus Loop', color: '#237f72', stopNames: ['Main Gate', 'Library', 'Science Block', 'North Hostel', 'Sports Complex'], frequencyMinutes: 12, firstTrip: '07:00', lastTrip: '22:00' },
     { code: 'R2', name: 'South Campus Express', color: '#e48b48', stopNames: ['Main Gate', 'Admin Block', 'Cafeteria', 'South Hostel', 'Auditorium'], frequencyMinutes: 8, firstTrip: '07:30', lastTrip: '21:30' },
     { code: 'R3', name: 'Hostel Connector', color: '#8474c8', stopNames: ['North Hostel', 'Library', 'Cafeteria', 'South Hostel'], frequencyMinutes: 15, firstTrip: '08:00', lastTrip: '22:00' },
+    { code: 'R4', name: 'Academic & Medical Link', color: '#4ea3d8', stopNames: ['Main Gate', 'Academic Block', 'Medical Centre', 'University Mall', 'Library'], frequencyMinutes: 10, firstTrip: '07:15', lastTrip: '21:45' },
   ]
   for (const route of routeDefaults) {
     await Route.updateOne({ code: route.code }, {
@@ -771,18 +774,51 @@ async function seedInitialData() {
     { code: 'SH-04', name: 'E-Shuttle 04', route: 'R1', capacity: 24, occupied: 14, status: 'in_service', location: { lat: 31.255, lng: 75.708 } },
     { code: 'ER-12', name: 'E-Rickshaw 12', route: 'R2', capacity: 8, occupied: 6, status: 'in_service', location: { lat: 31.251, lng: 75.707 } },
     { code: 'SH-02', name: 'E-Shuttle 02', route: 'R3', capacity: 20, occupied: 8, status: 'in_service', location: { lat: 31.257, lng: 75.713 } },
+    { code: 'SH-08', name: 'E-Shuttle 08', route: 'R4', capacity: 24, occupied: 11, status: 'in_service', location: { lat: 31.249, lng: 75.710 } },
   ]
   for (const vehicle of vehicleDefaults) {
     const { route, ...fields } = vehicle
     await Vehicle.updateOne({ code: vehicle.code }, { $setOnInsert: { ...fields, route: routeByCode.get(route) } }, { upsert: true })
   }
-  for (const [routeCode, departures] of Object.entries({ R1: ['07:00', '07:12', '07:24', '08:00', '08:12', '12:00', '16:00', '20:00'], R2: ['07:30', '07:38', '07:46', '08:00', '12:00', '16:00', '21:30'], R3: ['08:00', '08:15', '08:30', '12:00', '16:00', '20:00'] })) {
+  for (const [routeCode, departures] of Object.entries({
+    R1: ['07:00', '07:12', '07:24', '08:00', '08:12', '12:00', '16:00', '20:00'],
+    R2: ['07:30', '07:38', '07:46', '08:00', '12:00', '16:00', '21:30'],
+    R3: ['08:00', '08:15', '08:30', '12:00', '16:00', '20:00'],
+    R4: ['07:15', '07:25', '07:35', '08:15', '12:00', '16:00', '21:45'],
+  })) {
     const route = routeByCode.get(routeCode)
     for (const departureTime of departures) {
       await Schedule.updateOne({ route, departureTime, direction: 'Outbound' }, { $setOnInsert: { route, departureTime, direction: 'Outbound' } }, { upsert: true })
     }
   }
   await Settings.updateOne({ key: 'campus' }, { $setOnInsert: { key: 'campus', campusName: 'Lovely Professional University', serviceStart: '07:00', serviceEnd: '22:00' } }, { upsert: true })
+  await Notification.updateOne(
+    { title: 'Campus shuttle service notice' },
+    { $setOnInsert: {
+      title: 'Campus shuttle service notice',
+      message: 'Simulated shuttle locations refresh every 15 seconds. Allow extra time during peak campus hours.',
+      type: 'announcement',
+      route: null,
+    } },
+    { upsert: true },
+  )
+}
+
+async function simulateVehiclePositions() {
+  const vehicles = await Vehicle.find({ status: 'in_service', route: { $ne: null } })
+    .populate({ path: 'route', populate: { path: 'stops' } })
+
+  await Promise.all(vehicles.map(async (vehicle) => {
+    if (!vehicle.route) return
+    const stops = vehicle.route.stops
+    const location = simulatedLocation(vehicle.code, vehicle.route.frequencyMinutes, stops)
+    if (!location) return
+
+    await Vehicle.updateOne(
+      { _id: vehicle._id, status: 'in_service' },
+      { $set: { location, updatedAt: new Date() } },
+    )
+  }))
 }
 
 async function seedAdmin() {
@@ -805,16 +841,36 @@ async function seedAdmin() {
   else console.log('Ensured the configured transport administrator account has administrator access.')
 }
 
+async function seedDemoStudent() {
+  const email = (process.env.DEMO_STUDENT_EMAIL || 'student@campus.demo').trim().toLowerCase()
+  const password = process.env.DEMO_STUDENT_PASSWORD || 'StudentDemo123!'
+  if (!validEmail(email) || typeof password !== 'string' || password.length < 8 || Buffer.byteLength(password, 'utf8') > 72) {
+    throw new Error('Configure a valid DEMO_STUDENT_EMAIL and DEMO_STUDENT_PASSWORD.')
+  }
+  const passwordHash = await bcrypt.hash(password, 12)
+  await User.updateOne(
+    { email },
+    { $setOnInsert: { name: 'Demo Student', email, passwordHash, role: 'student', active: true } },
+    { upsert: true },
+  )
+}
+
 await mongoose.connect(mongoUri, { serverSelectionTimeoutMS: 10_000 })
 console.log(`Connected to MongoDB database "${mongoose.connection.name}".`)
 await seedInitialData()
+await simulateVehiclePositions()
 await seedAdmin()
+await seedDemoStudent()
 
 const server = app.listen(port, () => console.log(`Shuttle Tracker API listening on http://localhost:${port}`))
+const simulationTimer = setInterval(() => {
+  simulateVehiclePositions().catch((error) => console.error('Could not update simulated shuttle positions:', error))
+}, 15_000)
 
 async function shutdown(signal) {
   console.log(`${signal} received. Shutting down...`)
   server.close(async (error) => {
+    clearInterval(simulationTimer)
     if (error) {
       console.error('Could not close the HTTP server cleanly:', error)
       process.exitCode = 1

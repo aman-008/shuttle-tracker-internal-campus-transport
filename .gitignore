@@ -1,6 +1,8 @@
 node_modules/
 client/node_modules/
 client/dist/
+client/.next/
+client/out/
 server/.env
 .env
 .DS_Store

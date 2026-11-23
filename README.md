@@ -1,80 +1,105 @@
-# Shuttle Tracker: Internal Campus Transport
+# Shuttle Tracker
 
-A campus transit application for Lovely Professional University with dedicated student and administrator workspaces. Students can browse routes, stops, and schedules, save favourites, view service updates, and report issues. Administrators can manage the campus fleet and transit network.
+Shuttle Tracker is a college-project demonstration of an internal campus transport workspace for Lovely Professional University. It provides separate student and administrator interfaces backed by MongoDB.
+
+> **Demonstration notice:** Vehicle movement is simulated by the server. This project does not collect real GPS locations or provide real-time vehicle tracking.
+
+## Architecture
+
+- **Frontend:** Next.js App Router, React 19, TypeScript, Axios, Zustand, Leaflet
+- **Backend:** Express 5, Mongoose, bcryptjs
+- **Database:** MongoDB
+- **Authentication:** HttpOnly, SameSite session cookies stored as hashed tokens in MongoDB
+- **Styling:** Responsive CSS dashboard
+- **Deployment:** One Render web service; Next.js proxies `/api/*` to the Express API
+
+The frontend polls the API for student data and refreshes live-map data every 15 seconds. The backend calculates sample vehicle positions along configured route stops every 15 seconds.
 
 ## Features
 
-### Students
+- Student registration and sign-in
+- Role-protected student and administrator workspaces
+- Campus dashboard, routes, stops and timetable
+- Saved favourite routes and stops
+- Crowd and delay reporting
+- Published campus notifications
+- Admin fleet, route, stop, schedule and account management
+- Report review, analytics and campus settings
+- Responsive desktop and mobile navigation
+- Loading, retry, empty and form error states
 
-- Dashboard with campus route and vehicle summaries
-- Simulated live campus map and estimated arrivals
-- Route, stop, and timetable browsing
-- Saved favourite stops and routes
-- Campus announcements and service notifications
-- Crowding, delay, and other issue reports
-- Profile and notification preferences
+## Demo accounts
 
-### Administrators
+The demo student account is seeded automatically:
 
-- Operations overview and fleet monitoring
-- Route, stop, vehicle, and schedule management
-- Rider report review and status updates
-- Student announcements
-- User roles and account status management
-- Fleet utilization, popular stops, and delay analytics
-- Campus service settings
+| Role | Email | Password |
+|---|---|---|
+| Student | `student@campus.demo` | `StudentDemo123!` |
+| Administrator | Configure through `ADMIN_EMAIL` | Configure through `ADMIN_PASSWORD` |
 
-## Technology
+Do not publish real administrator or database passwords. Demo credentials are demonstration values only.
 
-- React, TypeScript, and Vite frontend (`client/`)
-- Express and Node.js API (`server/`)
-- MongoDB with Mongoose
-- Bcrypt password hashing and server-side sessions using HttpOnly cookies
+## Local setup
 
-Vehicle locations and arrival estimates are simulated. Real GPS tracking requires an authorized campus vehicle data feed.
-
-## Run locally
-
-Requirements: Node.js and a MongoDB instance.
+Requirements: Node.js 24 and a reachable MongoDB database.
 
 1. Install dependencies:
 
    ```sh
-   npm install
-   npm install --prefix client
+   npm ci
+   npm ci --prefix client
    ```
 
-2. Create the private API configuration:
+2. Create the private server environment file:
 
    ```sh
    cp server/.env.example server/.env
    ```
 
-   Set `MONGODB_URI`, `ADMIN_EMAIL`, and `ADMIN_PASSWORD` in `server/.env`. Use a unique admin password of 12–72 UTF-8 bytes. Never commit or share this file; it is ignored by Git.
+3. Set these values in `server/.env`:
 
-3. Start the API and frontend:
+   ```text
+   MONGODB_URI=<your MongoDB connection string>
+   ADMIN_EMAIL=<demo administrator email>
+   ADMIN_PASSWORD=<demo administrator password>
+   DEMO_STUDENT_EMAIL=student@campus.demo
+   DEMO_STUDENT_PASSWORD=StudentDemo123!
+   ```
+
+Use a MongoDB database user with read/write access and a unique administrator password of at least 12 characters.
+
+4. Start the application:
 
    ```sh
    npm run dev
    ```
 
-   The frontend runs at `http://localhost:5173` and proxies `/api` requests to the API on port 3001.
+5. Open `http://localhost:3000`.
 
-4. Validate changes:
+Next.js uses port `3000`; the Express API uses port `3001`. The Next.js proxy keeps browser API requests under the same origin.
 
-   ```sh
-   npm run build
-   npm run lint
-   ```
+## Validation
 
-The API seeds sample routes, stops, vehicles, schedules, and campus settings on startup without overwriting existing records. Public registration always creates student accounts; administrator access is provisioned from the server environment.
+```sh
+npm run build
+npm run lint
+node --test server/simulation.test.js
+```
 
-For production, configure `MONGODB_URI`, `ADMIN_EMAIL`, `ADMIN_PASSWORD`, and `NODE_ENV=production` on the API host. Serve the frontend and API on the same origin or use a reverse proxy for `/api`. Production session cookies require HTTPS.
+## Deployment
 
-See [`client/README.md`](client/README.md) for additional setup and authentication details.
+Configure `MONGODB_URI`, `ADMIN_EMAIL`, `ADMIN_PASSWORD`, and optional demo account variables as secret environment values. Add the deployment IP to MongoDB Atlas Network Access.
 
-## Deploy to Render
+Never place MongoDB credentials or administrator passwords in frontend environment variables or browser storage. Production session cookies require HTTPS.
 
-The root [`render.yaml`](render.yaml) configures a single Render web service that builds the frontend and serves it alongside the API. Create a new Blueprint from this GitHub repository and provide `MONGODB_URI`, `ADMIN_EMAIL`, and `ADMIN_PASSWORD` as secret environment values when prompted. Use a MongoDB Atlas URI that allows connections from Render, and a unique administrator password of 12–72 UTF-8 bytes. Do not commit credentials. Render sets `NODE_ENV=production`, enabling secure HTTPS-only session cookies.
+## Demonstration checklist
 
-The free Render service may sleep when idle and take a short time to wake on the next visit.
+- [ ] Start both frontend and backend.
+- [ ] Sign in with the administrator account.
+- [ ] Verify Overview, shuttles, routes, stops, schedules, users, reports, analytics and settings.
+- [ ] Create, edit and delete one demonstration route or stop, then restore the sample data if needed.
+- [ ] Sign out and sign in with `student@campus.demo`.
+- [ ] Verify the dashboard, live map, routes, stops, timetable, favourites and notifications.
+- [ ] Save one favourite stop and one favourite route.
+- [ ] Submit a crowd or delay report and resolve it as the administrator.
+- [ ] Open the live map and explain that shuttle icons move through a server-side simulation.

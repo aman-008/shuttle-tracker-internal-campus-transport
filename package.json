@@ -3,7 +3,7 @@
   "private": true,
   "scripts": {
     "dev": "concurrently -k -n api,web \"node --watch server/index.js\" \"npm run dev --prefix client\"",
-    "start": "node server/index.js",
+    "start": "concurrently -k -n api,web \"node server/index.js\" \"npm run start --prefix client\"",
     "build": "npm run build --prefix client",
     "lint": "npm run lint --prefix client"
   },
