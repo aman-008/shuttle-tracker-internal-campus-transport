@@ -17,18 +17,18 @@
     "express-rate-limit": "^8.1.0",
     "leaflet": "^1.9.4",
     "lucide-react": "^1.72.0",
+    "mongoose": "^8.18.0",
     "react-hook-form": "^7.92.0",
     "react-leaflet": "^5.0.0",
     "react-router-dom": "^7.18.5",
     "recharts": "^3.10.1",
     "socket.io-client": "^4.8.4",
-    "mongoose": "^8.18.0",
     "zod": "^4.6.7",
     "zustand": "^5.1.0"
   },
   "devDependencies": {
-    "concurrently": "^9.2.1",
     "@tailwindcss/vite": "^4.3.5",
+    "concurrently": "^9.2.5",
     "tailwindcss": "^4.3.5"
   }
 }
